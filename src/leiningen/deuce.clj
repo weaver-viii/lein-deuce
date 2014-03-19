@@ -6,14 +6,23 @@
 
 (defn- build-init [project]
   ;;TODO: support ring options
-    (if-let [init-fn (-> project :immutant :init)]
-    (pr-str `(do (require '~(symbol (namespace init-fn)))
-                 (~init-fn)))))
+  ;;TODO: make repl optional
+  (if-let [init-fn (-> project :immutant :init)]
+    (pr-str `(do
+               (require 'immutant.wildfly)
+               (immutant.wildfly/init (quote ~init-fn) {:nrepl {:host "localhost" :port 0}})))))
+
+(defn- classpath [project]
+  ;; TODO: don't displace a version that may be there
+  (-> project
+    (update-in [:dependencies]
+      conj ['org.immutant/wildfly "2.0.0-SNAPSHOT"])
+    cp/get-classpath))
 
 (defn- build-descriptor [project]
   {:root (:root project)
    :language "clojure"
-   :classpath (str/join ":" (cp/get-classpath project))
+   :classpath (str/join ":" (classpath project))
    ;; TODO: don't barf if :init is nil
    :init (build-init project)})
 
@@ -29,6 +38,7 @@
   ;; pull that version from the existing deps somehow?
   (-> (cp/resolve-dependencies :dependencies
         {:dependencies '[[org.projectodd.wunderboss/wunderboss-wildfly "0.1.0-SNAPSHOT"]]})
+    (as-> files (filter #(re-find #"wunderboss-wildfly.*\.jar" (.getName %)) files))
     first
     (io/copy to)))
 
